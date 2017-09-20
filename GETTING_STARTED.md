@@ -49,6 +49,40 @@ sudo systemctl start postgresql
 sudo su postgres -c "psql -c \"CREATE ROLE root SUPERUSER LOGIN PASSWORD 'smartvm'\""
 ```
 
+### Arch Linux
+
+First, install all system dependencies:
+```bash
+sudo pacman -S git memcached postgresql bzip2 libffi readline sqlite nodejs gcc
+# From AUR (i.e. via pacaur)
+pacaur -S openscap
+```
+
+Then, install npm packages required for the UI:
+
+```bash
+sudo npm install -g bower yarn webpack gulp
+```
+
+Start Memcached:
+
+```bash
+sudo systemctl enable memcached
+sudo systemctl start memcached
+```
+
+Then, configure, install and run PostgreSQL:
+
+```bash
+sudo su postgres -c "initdb --locale $LANG -E UTF8 -D '/var/lib/postgres/data'"
+sudo echo "local all all trust" >> /var/lib/postgres/pg_hba.conf
+sudo systemctl enable postgresql
+sudo systemctl start postgresql
+sudo su postgres -c "psql -c \"CREATE ROLE root SUPERUSER LOGIN PASSWORD 'smartvm'\""
+```
+
+More information on PostgreSQL in Arch Linux can be found on [ArchWiki](https://wiki.archlinux.org/index.php/PostgreSQL).
+
 ### OS X
 
 TODO.
@@ -204,8 +238,11 @@ echo "DONE."
 
 # Installing Docker
 
-Docker is necessary to run `hawkinit`, which we will cover later. To install
-it, first remove any currently installed version of Docker:
+Docker is necessary to run `hawkinit`, which we will cover later.
+
+### Fedora
+
+To install Docker, first remove any currently installed version of Docker:
 
 ```bash
 sudo dnf remove docker docker-common docker-selinux docker-engine-selinux docker-engine
@@ -244,6 +281,38 @@ And finally, to test if everything is working ok:
 ```bash
 docker run alpine /bin/echo OK
 ```
+
+### Arch Linux
+
+Arch Linux contains Docker CE in its repositories. Thanks to that, Docker installation
+is simple as:
+
+```bash
+sudo pacman -S docker docker-compose
+```
+
+If you want to run docker as a regular user you can add yourself to the `docker` group:
+
+```bash
+sudo usermod -a -G docker `whoami`
+newgrp docker # to update your groups on the session
+```
+Warning: Anyone added to the docker group is root equivalent. More information [here](https://github.com/docker/docker/issues/9976) and [here](http://docs.docker.com/engine/articles/security/).
+
+After that, enable and start Docker:
+
+```bash
+sudo systemctl enable docker
+sudo systemctl start docker
+```
+
+And finally, to test if everything is working ok:
+
+```bash
+docker run alpine /bin/echo OK
+```
+
+Advanced Docker configuration in Arch Linux is covered by [ArchWiki](https://wiki.archlinux.org/index.php/Docker).
 
 # Installing Hawkular
 
