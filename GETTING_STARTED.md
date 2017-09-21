@@ -54,7 +54,7 @@ sudo su postgres -c "psql -c \"CREATE ROLE root SUPERUSER LOGIN PASSWORD 'smartv
 First, install all system dependencies:
 ```bash
 sudo pacman -S git memcached postgresql bzip2 libffi readline sqlite nodejs gcc
-# From AUR (i.e. via pacaur)
+# From AUR (e.g. via pacaur)
 pacaur -S openscap
 ```
 
