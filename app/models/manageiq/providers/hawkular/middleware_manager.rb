@@ -51,24 +51,32 @@ module ManageIQ::Providers
     attr_accessor :client
 
     def verify_credentials(_auth_type = nil, options = {})
-      begin
-        # As the connect will only give a handle
-        # we verify the credentials via an actual operation
-        connect(options).inventory.list_feeds
-      rescue URI::InvalidComponentError
-        raise MiqException::MiqHostError, "Host '#{hostname}' is invalid"
-      rescue ::Hawkular::ConnectionException
-        raise MiqException::MiqUnreachableError, "Unable to connect to #{hostname}:#{port}"
-      rescue ::Hawkular::Exception => he
-        raise MiqException::MiqInvalidCredentialsError, 'Invalid credentials' if he.status_code == 401
-        raise MiqException::MiqHostError, 'Hawkular not found on host' if he.status_code == 404
-        raise MiqException::MiqCommunicationsError, he.message
-      rescue => err
-        $log.error(err)
-        raise MiqException::Error, 'Unable to verify credentials'
-      end
+      self.class.validate_connection(connect(options), options[:hostname], options[:port])
 
       true
+    end
+
+    def self.validate_connection(connection, hostname = nil, port = nil)
+      # As the connect will only give a handle
+      # we verify the credentials via an actual operation
+      connection_rescue_block(hostname, port) do
+        connection.inventory.list_feeds
+      end
+    end
+
+    def self.connection_rescue_block(hostname = nil, port = nil)
+      yield
+    rescue URI::InvalidComponentError
+      raise MiqException::MiqHostError, "Host '#{hostname}' is invalid"
+    rescue ::Hawkular::ConnectionException
+      raise MiqException::MiqUnreachableError, "Unable to connect to #{hostname}:#{port}"
+    rescue ::Hawkular::Exception => he
+      raise MiqException::MiqInvalidCredentialsError, 'Invalid credentials' if he.status_code == 401
+      raise MiqException::MiqHostError, 'Hawkular not found on host' if he.status_code == 404
+      raise MiqException::MiqCommunicationsError, he.message
+    rescue => err
+      $log.error(err)
+      raise MiqException::Error, 'Unable to verify credentials'
     end
 
     def validate_authentication_status
@@ -94,7 +102,7 @@ module ManageIQ::Providers
     end
 
     # Hawkular Client
-    def self.raw_connect(host, port, username, password, security_protocol, cert_store)
+    def self.raw_connect(host, port, username, password, security_protocol, cert_store, validate = false)
       credentials = {
         :username => username,
         :password => password
@@ -104,8 +112,12 @@ module ManageIQ::Providers
         :verify_ssl     => verify_ssl_mode(security_protocol),
         :ssl_cert_store => cert_store
       }
-      ::Hawkular::Client.new(:entrypoint => entrypoint(host, port, security_protocol),
-                             :credentials => credentials, :options => options)
+      connection = ::Hawkular::Client.new(:entrypoint => entrypoint(host, port, security_protocol),
+                                          :credentials => credentials, :options => options)
+
+      validate_connection(connection, host, port) if validate
+
+      connection
     end
 
     def connect(_options = {})
