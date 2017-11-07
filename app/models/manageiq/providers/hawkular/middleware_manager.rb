@@ -78,6 +78,7 @@ module ManageIQ::Providers
       $log.error(err)
       raise MiqException::Error, 'Unable to verify credentials'
     end
+    private_class_method :connection_rescue_block
 
     def validate_authentication_status
       {:available => true, :message => nil}
