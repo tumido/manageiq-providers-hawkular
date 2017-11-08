@@ -227,4 +227,107 @@ describe ManageIQ::Providers::Hawkular::MiddlewareManager do
       end
     end
   end
+
+  describe 'connectivity' do
+    let(:ems)      { FactoryGirl.create(:ems_hawkular) }
+    let(:username) { 'abcdefghij' }
+    let(:password) { '1234567890' }
+    let(:host)     { 'awesomehawkular.org' }
+    let(:port)     { 8080 }
+
+    describe '#connect' do
+      let(:endpoint)       { FactoryGirl.create(:endpoint) }
+      let(:http_scheme)    { URI::HTTPS }
+      let(:verify_ssl)     { 1 }
+      let(:ssl_cert_store) { nil }
+      let(:connection_options) do
+        {
+          :entrypoint  => http_scheme.build(:host => host, :port => port).to_s,
+          :credentials => { :username => username, :password => password },
+          :options     => { :tenant => 'hawkular', :verify_ssl => verify_ssl, :ssl_cert_store => ssl_cert_store }
+        }
+      end
+      subject { ems.connect }
+
+      before do
+        allow(ems).to receive_messages(
+          :hostname                => host,
+          :port                    => port,
+          :default_endpoint        => endpoint,
+          :authentication_userid   => username,
+          :authentication_password => password
+        )
+      end
+
+      context 'non-ssl' do
+        let(:http_scheme) { URI::HTTP }
+
+        it { is_expected.to be_connected_to connection_options }
+      end
+
+      context 'ssl-without-validation' do
+        let(:verify_ssl) { 0 }
+        let(:endpoint)   { FactoryGirl.create(:endpoint, :security_protocol => 'ssl-without-validation') }
+
+        it { is_expected.to be_connected_to connection_options }
+      end
+
+      context 'ssl' do
+        let(:endpoint) { FactoryGirl.create(:endpoint, :security_protocol => 'ssl') }
+
+        it { is_expected.to be_connected_to connection_options }
+      end
+    end
+
+    context 'validation' do
+      shared_examples 'validate' do
+        let(:connection) { dup }
+        let(:struct) { dup }
+        before do
+          allow(connection).to receive(:inventory).and_return(struct)
+          allow(ems).to receive(:connect).and_return(connection)
+        end
+
+        context 'failed' do
+          before do
+            allow(struct).to receive(:list_feeds).and_raise(exception)
+          end
+
+          [
+            [::Hawkular::Exception.new("Unauthorized", 401), MiqException::MiqInvalidCredentialsError, /Invalid credentials/],
+            [::Hawkular::Exception.new("Host not found", 404), MiqException::MiqHostError, /Hawkular not found on host/],
+            [::Hawkular::ConnectionException.new(nil), MiqException::MiqUnreachableError, /Unable to connect to*/],
+            [URI::InvalidComponentError, MiqException::MiqHostError, /Host .* is invalid/],
+            [StandardError, MiqException::Error, /Unable to verify credentials/]
+          ].each do |raised, expectation, message|
+            context message do
+              let(:exception) { raised }
+
+              it 'raises exception' do
+                expect { subject }.to raise_error(expectation, message)
+              end
+            end
+          end
+        end
+
+        context 'sucessfull' do
+          before do
+            allow(struct).to receive(:list_feeds).and_return([])
+          end
+
+          it { is_expected.to be_truthy }
+        end
+      end
+
+      describe '#verify_credentials' do
+        subject { ems.verify_credentials }
+        include_examples 'validate'
+      end
+
+      describe '.raw_connect' do
+        subject { described_class.raw_connect(host, port, username, password, nil, nil, true) }
+        include_examples 'validate'
+      end
+    end
+  end
 end
